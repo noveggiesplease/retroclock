@@ -151,46 +151,55 @@
   const applyBright = () => { face.style.opacity = BRIGHT[state.bright % BRIGHT.length]; };
   applyBright();
 
-  // ---------- Audio (generated, no files) ----------
-  let ctx = null;
+  // ---------- Audio ----------
+  // Sounds are synthesized here into little WAV files and played through <audio> elements.
+  // iOS treats Web Audio as "ambient" sound that the silent switch mutes, but media playback
+  // ignores the switch. (J's test 2026-10-01: alarm with silent on flashed but made no sound.)
+  const RATE = 22050;
+  function wav(seconds, sampleAt) {
+    const n = Math.round(seconds * RATE), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVE"); str(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, RATE, true); v.setUint32(28, RATE * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    str(36, "data"); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sampleAt(i / RATE))) * 32767, true);
+    return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+  }
+  const sq = (f, t) => (Math.sin(2 * Math.PI * f * t) >= 0 ? 1 : -1);
+  const saw = (f, t) => 2 * ((f * t) % 1) - 1;
+  const env = (t, start, dur) => { const x = t - start; return x < 0 || x > dur ? 0 : Math.min(1, x / .004, (dur - x) / .004); };
+  // One cycle each; <audio loop> repeats it.
+  const LEN = { beep: 1.15, buzzer: 1.0 };
+  const SOUNDS = {
+    beep: wav(LEN.beep, t => { let e = 0; for (let i = 0; i < 4; i++) e += env(t, i * .14, .07); return .45 * e * sq(2730, t); }),  // piezo "beep-beep-beep-beep"
+    buzzer: wav(LEN.buzzer, t => env(t, 0, .55) * (.5 * saw(118, t) + .2 * sq(236, t))),                                           // clock-radio "BZZZT"
+  };
+  const players = {};
+  for (const k in SOUNDS) { const a = new Audio(SOUNDS[k]); a.loop = true; a.preload = "auto"; players[k] = a; }
+  let unlocked = false, active = null, stopT = null;
   function ensureAudio() {
-    try {
-      // Safari 16.4+: play like a media app, so the ring/silent switch may not mute us. Needs testing on iPhone.
-      if (navigator.audioSession) navigator.audioSession.type = "playback";
-      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-      if (ctx.state !== "running") ctx.resume();
-      // A silent blip unlocks output on iOS.
-      const o = ctx.createOscillator(), g = ctx.createGain(); g.gain.value = 0;
-      o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + .02);
-    } catch (e) {}
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+    if (!unlocked) {
+      // iOS only lets a page play sound after a tap: start each player muted once, then park it
+      // (unless the user already asked for that sound in the meantime).
+      for (const k in players) {
+        const a = players[k]; a.muted = true;
+        a.play().then(() => { unlocked = true; if (active !== k) { a.pause(); a.currentTime = 0; } a.muted = false; updateArm(); })
+                .catch(() => { a.muted = false; });
+      }
+    }
     updateArm();
   }
-  function tone(type, freq, start, dur, vol) {
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type; o.frequency.value = freq;
-    g.gain.setValueAtTime(0, start);
-    g.gain.linearRampToValueAtTime(vol, start + .004);
-    g.gain.setValueAtTime(vol, start + dur - .004);
-    g.gain.linearRampToValueAtTime(0, start + dur);
-    o.connect(g).connect(ctx.destination); o.start(start); o.stop(start + dur + .01);
-  }
-  // One pattern cycle; returns its length in seconds.
-  const PATTERNS = {
-    beep(t) { for (let i = 0; i < 4; i++) tone("square", 2730, t + i * .14, .07, .22); return 1.15; },   // piezo "beep-beep-beep-beep"
-    buzzer(t) { tone("sawtooth", 118, t, .55, .32); tone("square", 236, t, .55, .12); return 1.0; },     // clock-radio "BZZZT"
-  };
-  let loop = null;
   function startSound(kind, cycles) {
-    stopSound(); ensureAudio(); if (!ctx) return;
-    let n = 0;
-    const play = () => {
-      const len = PATTERNS[kind](ctx.currentTime + .03);
-      if (cycles && ++n >= cycles) { loop = setTimeout(stopSound, len * 1000); return; }
-      loop = setTimeout(play, len * 1000);
-    };
-    play();
+    stopSound(); ensureAudio(); active = kind;
+    const a = players[kind]; a.currentTime = 0; a.muted = false; a.play().catch(() => {});
+    if (cycles) stopT = setTimeout(stopSound, cycles * LEN[kind] * 1000);
   }
-  function stopSound() { clearTimeout(loop); loop = null; }
+  function stopSound() {
+    clearTimeout(stopT); active = null;
+    for (const k in players) { players[k].pause(); players[k].currentTime = 0; }
+  }
 
   // ---------- Keep the screen awake ----------
   let lock = null;
@@ -219,7 +228,7 @@
   const $ = id => document.getElementById(id);
   const fmt = t => { let [h, m] = t.split(":").map(Number); const ap = h >= 12 ? "PM" : "AM"; return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ap}`; };
   function updateBar() { $("alarmBtn").textContent = state.on ? `ALARM ${fmt(state.time)}` : "ALARM OFF"; }
-  function updateArm() { document.body.classList.toggle("needs-arm", state.on && (!ctx || ctx.state !== "running")); }
+  function updateArm() { document.body.classList.toggle("needs-arm", state.on && !unlocked); }
   let idleT;
   function poke() { document.body.classList.remove("idle"); clearTimeout(idleT); idleT = setTimeout(() => document.body.classList.add("idle"), 5000); }
 
