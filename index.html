@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>RetroClock</title>
+<meta name="description" content="A minimalist red seven-segment nightstand clock with one alarm. No tracking, no network.">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RetroClock">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>
+  :root {
+    --lit: #ff2614;
+    --glow: rgba(255, 38, 20, .55);
+    --ghost: #2b0603;
+    --ui: #7a1a10;
+    --bg: #000;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--lit); overflow: hidden;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; user-select: none; -webkit-user-select: none; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  #face { width: min(94vw, 150vh); max-height: 70vh; transition: opacity .4s; cursor: pointer; }
+  #face svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .seg { fill: var(--ghost); }
+  .seg.on { fill: var(--lit); filter: drop-shadow(0 0 .6px var(--glow)) drop-shadow(0 0 5px var(--glow)); }
+  .lbl { fill: var(--ghost); font: 600 13px ui-monospace, Menlo, monospace; letter-spacing: 1px; }
+  .lbl.on { fill: var(--lit); }
+  .ringing #face { animation: flash 1s steps(1) infinite; width: min(94vw, 105vh); margin-bottom: 18vh; }
+  @keyframes flash { 50% { opacity: .15; } }
+
+  #bar { position: fixed; left: 0; right: 0; bottom: calc(14px + env(safe-area-inset-bottom));
+    display: flex; justify-content: center; gap: 28px; font-size: 15px; letter-spacing: 2px;
+    color: var(--ui); transition: opacity 1.2s; }
+  #bar button, .panel button, .panel select, .panel input { font: inherit; letter-spacing: inherit; }
+  #bar button { background: none; border: 0; color: inherit; padding: 10px 6px; cursor: pointer; }
+  body.idle #bar { opacity: .25; }
+  #arm { display: none; color: var(--lit); animation: blink 1.6s infinite; }
+  body.needs-arm #arm { display: inline; }
+  @keyframes blink { 50% { opacity: .3; } }
+
+  #ring { position: fixed; inset: 0; display: none; align-items: flex-end; justify-content: center; gap: 18px;
+    padding: 0 16px calc(28px + env(safe-area-inset-bottom)); }
+  .ringing #ring { display: flex; }
+  .ringing #bar { display: none; }
+  #ring button { flex: 1; max-width: 260px; padding: 22px 10px; font: 700 20px ui-monospace, Menlo, monospace;
+    letter-spacing: 3px; border-radius: 14px; border: 2px solid var(--lit); cursor: pointer; }
+  #snooze { background: var(--lit); color: #000; }
+  #off { background: #000; color: var(--lit); }
+
+  .panel { position: fixed; inset: 0; background: rgba(0,0,0,.94); display: none; align-items: center; justify-content: center;
+    padding: 16px; }
+  .panel.open { display: flex; }
+  .card { width: min(380px, 100%); border: 1px solid #3a0a05; border-radius: 16px; padding: 22px 20px; color: var(--lit);
+    display: grid; gap: 16px; font-size: 15px; letter-spacing: 1px; }
+  .card h2 { margin: 0; font-size: 16px; letter-spacing: 4px; font-weight: 700; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .panel input[type=time], .panel select { background: #120201; color: var(--lit); border: 1px solid #4a0d06;
+    border-radius: 10px; padding: 10px 12px; font-size: 18px; color-scheme: dark; min-width: 0; }
+  .toggle { width: 64px; height: 34px; border-radius: 17px; border: 1px solid #4a0d06; background: #120201;
+    position: relative; cursor: pointer; padding: 0; }
+  .toggle::after { content: ""; position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--ghost); transition: left .2s, background .2s; }
+  .toggle[aria-checked=true]::after { left: 34px; background: var(--lit); box-shadow: 0 0 8px var(--glow); }
+  .btns { display: flex; gap: 10px; }
+  .btns button { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #4a0d06; background: #120201;
+    color: var(--lit); cursor: pointer; }
+  .btns button.primary { background: var(--lit); color: #000; border-color: var(--lit); font-weight: 700; }
+  .note { font-size: 12px; color: var(--ui); line-height: 1.5; letter-spacing: .5px; }
+</style>
+</head>
+<body class="idle">
+  <div id="face" aria-label="Clock. Tap to change brightness." role="button"></div>
+
+  <div id="bar">
+    <button id="arm" type="button">TAP TO ARM SOUND</button>
+    <button id="alarmBtn" type="button">ALARM OFF</button>
+  </div>
+
+  <div id="ring">
+    <button id="snooze" type="button">SNOOZE 10</button>
+    <button id="off" type="button">OFF</button>
+  </div>
+
+  <div class="panel" id="panel" role="dialog" aria-label="Alarm settings">
+    <div class="card">
+      <h2>ALARM</h2>
+      <div class="row"><span>Time</span><input id="time" type="time" value="06:30"></div>
+      <div class="row"><span>On</span><button class="toggle" id="toggle" role="switch" aria-checked="false" type="button" aria-label="Alarm on"></button></div>
+      <div class="row"><span>Sound</span>
+        <select id="sound"><option value="beep">Beep</option><option value="buzzer">Buzzer</option></select></div>
+      <div class="btns"><button id="test" type="button">Test sound</button><button id="done" class="primary" type="button">Done</button></div>
+      <div class="note" id="status"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ---------- Seven-segment face (SVG) ----------
+  const T = 18, G = 3;                       // segment thickness, gap
+  const H = (cy, x1, x2) => `${x1},${cy} ${x1+T/2},${cy-T/2} ${x2-T/2},${cy-T/2} ${x2},${cy} ${x2-T/2},${cy+T/2} ${x1+T/2},${cy+T/2}`;
+  const V = (cx, y1, y2) => `${cx},${y1} ${cx+T/2},${y1+T/2} ${cx+T/2},${y2-T/2} ${cx},${y2} ${cx-T/2},${y2-T/2} ${cx-T/2},${y1+T/2}`;
+  const SEGS = {
+    a: H(10, 10+G, 90-G), g: H(90, 10+G, 90-G), d: H(170, 10+G, 90-G),
+    f: V(10, 10+G, 90-G), b: V(90, 10+G, 90-G), e: V(10, 90+G, 170-G), c: V(90, 90+G, 170-G),
+  };
+  const DIGITS = { 0:"abcdef", 1:"bc", 2:"abged", 3:"abgcd", 4:"fgbc", 5:"afgcd", 6:"afgedc", 7:"abc", 8:"abcdefg", 9:"abcdfg" };
+  const XS = [62, 172, 322, 432];            // digit x offsets; colon sits between 2 and 3
+
+  let svg = `<svg viewBox="0 0 545 185" xmlns="http://www.w3.org/2000/svg"><g transform="skewX(-6) translate(18 0)">`;
+  XS.forEach((x, i) => {
+    svg += `<g transform="translate(${x} 2)">`;
+    for (const s in SEGS) svg += `<polygon class="seg" id="d${i}${s}" points="${SEGS[s]}"/>`;
+    svg += `</g>`;
+  });
+  svg += `<circle class="seg" id="c1" cx="297" cy="62" r="9"/><circle class="seg" id="c2" cx="297" cy="122" r="9"/>`;
+  svg += `<circle class="seg" id="pm" cx="22" cy="24" r="7"/><circle class="seg" id="al" cx="22" cy="160" r="7"/>`;
+  svg += `</g><text class="lbl" id="pmL" x="6" y="52">PM</text><text class="lbl" id="alL" x="2" y="140">AL</text></svg>`;
+  const face = document.getElementById("face");
+  face.innerHTML = svg;
+  const on = (id, v) => document.getElementById(id).classList.toggle("on", !!v);
+
+  function draw(now) {
+    let h = now.getHours(), m = now.getMinutes();
+    const pm = h >= 12; h = h % 12 || 12;
+    const ds = [h >= 10 ? 1 : null, h % 10, Math.floor(m / 10), m % 10];  // leading 1 blank, like real clocks
+    ds.forEach((d, i) => { for (const s in SEGS) on(`d${i}${s}`, d !== null && DIGITS[d].includes(s)); });
+    const colon = now.getMilliseconds() < 500;
+    on("c1", colon); on("c2", colon);
+    on("pm", pm); on("pmL", pm);
+    on("al", state.on); on("alL", state.on);
+  }
+
+  // ---------- Settings (this phone only) ----------
+  const KEY = "retroclock.v1";
+  const state = { time: "06:30", on: false, sound: "beep", bright: 0 };
+  try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+  const BRIGHT = [1, .5, .22, .07];
+  const applyBright = () => { face.style.opacity = BRIGHT[state.bright % BRIGHT.length]; };
+  applyBright();
+
+  // ---------- Audio (generated, no files) ----------
+  let ctx = null;
+  function ensureAudio() {
+    try {
+      // Safari 16.4+: play like a media app, so the ring/silent switch may not mute us. Needs testing on iPhone.
+      if (navigator.audioSession) navigator.audioSession.type = "playback";
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state !== "running") ctx.resume();
+      // A silent blip unlocks output on iOS.
+      const o = ctx.createOscillator(), g = ctx.createGain(); g.gain.value = 0;
+      o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + .02);
+    } catch (e) {}
+    updateArm();
+  }
+  function tone(type, freq, start, dur, vol) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, start);
+    g.gain.linearRampToValueAtTime(vol, start + .004);
+    g.gain.setValueAtTime(vol, start + dur - .004);
+    g.gain.linearRampToValueAtTime(0, start + dur);
+    o.connect(g).connect(ctx.destination); o.start(start); o.stop(start + dur + .01);
+  }
+  // One pattern cycle; returns its length in seconds.
+  const PATTERNS = {
+    beep(t) { for (let i = 0; i < 4; i++) tone("square", 2730, t + i * .14, .07, .22); return 1.15; },   // piezo "beep-beep-beep-beep"
+    buzzer(t) { tone("sawtooth", 118, t, .55, .32); tone("square", 236, t, .55, .12); return 1.0; },     // clock-radio "BZZZT"
+  };
+  let loop = null;
+  function startSound(kind, cycles) {
+    stopSound(); ensureAudio(); if (!ctx) return;
+    let n = 0;
+    const play = () => {
+      const len = PATTERNS[kind](ctx.currentTime + .03);
+      if (cycles && ++n >= cycles) { loop = setTimeout(stopSound, len * 1000); return; }
+      loop = setTimeout(play, len * 1000);
+    };
+    play();
+  }
+  function stopSound() { clearTimeout(loop); loop = null; }
+
+  // ---------- Keep the screen awake ----------
+  let lock = null;
+  async function wake() {
+    try { if ("wakeLock" in navigator && !lock) { lock = await navigator.wakeLock.request("screen");
+      lock.addEventListener("release", () => { lock = null; }); } } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") { wake(); updateArm(); }
+  });
+
+  // ---------- Alarm logic ----------
+  let ringing = false, snoozeUntil = 0, lastFired = "", ringStarted = 0;
+  const RING_MAX = 30 * 60 * 1000;           // give up after 30 minutes, like real clocks
+  function check(now) {
+    const hm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const key = now.toDateString() + " " + hm;
+    if (!ringing && state.on && hm === state.time && lastFired !== key) { lastFired = key; ring(); }
+    if (!ringing && snoozeUntil && now.getTime() >= snoozeUntil) { snoozeUntil = 0; ring(); }
+    if (ringing && now.getTime() - ringStarted > RING_MAX) stopRing();
+  }
+  function ring() { ringing = true; ringStarted = Date.now(); document.body.classList.add("ringing"); startSound(state.sound); }
+  function stopRing() { ringing = false; stopSound(); document.body.classList.remove("ringing"); }
+
+  // ---------- UI ----------
+  const $ = id => document.getElementById(id);
+  const fmt = t => { let [h, m] = t.split(":").map(Number); const ap = h >= 12 ? "PM" : "AM"; return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ap}`; };
+  function updateBar() { $("alarmBtn").textContent = state.on ? `ALARM ${fmt(state.time)}` : "ALARM OFF"; }
+  function updateArm() { document.body.classList.toggle("needs-arm", state.on && (!ctx || ctx.state !== "running")); }
+  let idleT;
+  function poke() { document.body.classList.remove("idle"); clearTimeout(idleT); idleT = setTimeout(() => document.body.classList.add("idle"), 5000); }
+
+  face.addEventListener("click", () => { ensureAudio(); wake(); poke(); state.bright = (state.bright + 1) % BRIGHT.length; applyBright(); save(); });
+  $("arm").addEventListener("click", () => { ensureAudio(); wake(); poke(); });
+  $("alarmBtn").addEventListener("click", () => {
+    ensureAudio(); wake(); poke();
+    $("time").value = state.time; $("toggle").setAttribute("aria-checked", state.on); $("sound").value = state.sound;
+    $("status").textContent = [
+      "wakeLock" in navigator ? "Screen stays awake while open." : "This browser can't keep the screen awake; set Auto-Lock to Never.",
+      "The alarm only rings while RetroClock is open. Leave it on the charger.",
+    ].join(" ");
+    $("panel").classList.add("open");
+  });
+  $("toggle").addEventListener("click", e => { const b = e.currentTarget; b.setAttribute("aria-checked", b.getAttribute("aria-checked") !== "true"); });
+  $("test").addEventListener("click", () => startSound($("sound").value, 2));
+  $("done").addEventListener("click", () => {
+    stopSound();
+    state.time = $("time").value || state.time; state.on = $("toggle").getAttribute("aria-checked") === "true";
+    state.sound = $("sound").value; save(); updateBar(); updateArm(); ensureAudio();
+    $("panel").classList.remove("open"); poke();
+  });
+  $("snooze").addEventListener("click", () => { stopRing(); snoozeUntil = Date.now() + 10 * 60 * 1000; });
+  $("off").addEventListener("click", () => { stopRing(); snoozeUntil = 0; });
+
+  updateBar(); updateArm(); poke();
+  const tick = () => { const now = new Date(); draw(now); check(now); };
+  tick(); setInterval(tick, 250);
+
+  if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
