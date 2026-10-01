@@ -6,6 +6,10 @@
 <title>RetroClock</title>
 <meta name="description" content="A minimalist red seven-segment nightstand clock with one alarm. No tracking, no network.">
 <meta name="theme-color" content="#000000">
+<!-- Already a dark page: stop browser "night modes" (Brave iOS Night Mode is Dark Reader based) from recoloring it.
+     Without this, Brave turned the dark-red ghost segments white (J, 2026-10-01). -->
+<meta name="color-scheme" content="dark">
+<meta name="darkreader-lock">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,6 +19,7 @@
 <link rel="icon" href="icon-192.png">
 <style>
   :root {
+    color-scheme: dark;
     --lit: #ff2614;
     --glow: rgba(255, 38, 20, .55);
     --ghost: #2b0603;
