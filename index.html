@@ -95,6 +95,10 @@
   #fb textarea { min-height: 120px; resize: vertical; }
   #fb label { font-size: 13px; letter-spacing: 1px; color: #ff8a7d; display: grid; gap: 6px; min-width: 0; }
   #fbStatus:empty { display: none; }
+  /* One flexible column, so a wide child (like Cloudflare's 300px check) can't stretch the whole form. */
+  #fb .card { grid-template-columns: minmax(0, 1fr); }
+  #fbCheck { min-height: 65px; overflow: hidden; }
+  @media (max-width: 360px) { #fb.panel { padding: 8px; } #fb .card { padding: 18px 12px; } }
   .linkbtn { background: none; border: 0; color: var(--ui); font: inherit; font-size: 13px; text-decoration: underline;
     cursor: pointer; padding: 4px 0; justify-self: center; }
   .note { font-size: 12px; color: var(--ui); line-height: 1.5; letter-spacing: .5px; }
@@ -323,7 +327,9 @@
   let fbToken = "", fbWidget = null;
   function fbRenderCheck() {
     if (fbWidget !== null) { window.turnstile.reset(fbWidget); return; }
-    fbWidget = window.turnstile.render("#fbCheck", { sitekey: FB_KEY, theme: "dark",
+    // "flexible" fills the card; narrow screens (e.g. iPhone Display Zoom) get the small "compact" box instead.
+    const size = $("fbCheck").clientWidth >= 300 ? "flexible" : "compact";
+    fbWidget = window.turnstile.render("#fbCheck", { sitekey: FB_KEY, theme: "dark", size,
       callback: t => { fbToken = t; }, "expired-callback": () => { fbToken = ""; } });
   }
   function fbOpen() {
