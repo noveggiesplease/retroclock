@@ -312,7 +312,7 @@
   // ---------- Feedback form (2026-10-02) ----------
   // Posts to the retroclock-feedback Worker (same origin, retroclock.org only). Turnstile (Cloudflare's
   // anti-spam check) is loaded only when the form opens, so the rest of the app makes no outside requests.
-  const TURNSTILE_SITEKEY = "";  // set once J creates the widget; empty = feedback hidden on the live site
+  const TURNSTILE_SITEKEY = "0x4AAAAAAFMUNPjNQ-SaCWvI";  // set once J creates the widget; empty = feedback hidden on the live site
   const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
   const FB_KEY = isLocal ? "1x00000000000000000000AA" : TURNSTILE_SITEKEY;  // Cloudflare's always-pass test key locally
   const FB_URL = isLocal ? "http://localhost:8787/api/feedback" : "/api/feedback";
