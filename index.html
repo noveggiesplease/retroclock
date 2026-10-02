@@ -67,7 +67,7 @@
   .panel { position: fixed; inset: 0; background: rgba(0,0,0,.94); display: none; align-items: center; justify-content: center;
     padding: 16px; }
   .panel.open { display: flex; }
-  .card { width: min(380px, 100%); border: 1px solid #3a0a05; border-radius: 16px; padding: 22px 20px; color: var(--lit);
+  .card { background: #000; width: min(380px, 100%); border: 1px solid #3a0a05; border-radius: 16px; padding: 22px 20px; color: var(--lit);
     display: grid; gap: 16px; font-size: 15px; letter-spacing: 1px; }
   .card h2 { margin: 0; font-size: 16px; letter-spacing: 4px; font-weight: 700; }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -88,6 +88,11 @@
   #welcome p, #welcome ul { margin: 0; color: #ff8a7d; font-size: 14px; }
   #welcome ul { padding-left: 18px; display: grid; gap: 4px; }
   #welcome b { color: var(--lit); }
+  #fb textarea, #fb input { width: 100%; background: #120201; color: var(--lit); border: 1px solid #4a0d06; border-radius: 10px;
+    padding: 10px 12px; font: 15px ui-monospace, Menlo, monospace; color-scheme: dark; }
+  #fb textarea { min-height: 120px; resize: vertical; }
+  #fb label { font-size: 13px; letter-spacing: 1px; color: #ff8a7d; display: grid; gap: 6px; }
+  #fbStatus:empty { display: none; }
   .linkbtn { background: none; border: 0; color: var(--ui); font: inherit; font-size: 13px; text-decoration: underline;
     cursor: pointer; padding: 4px 0; justify-self: center; }
   .note { font-size: 12px; color: var(--ui); line-height: 1.5; letter-spacing: .5px; }
@@ -135,8 +140,20 @@
       <h3>ONE IMPORTANT THING</h3>
       <p>RetroClock is a nightstand clock. The alarm only rings <b>while the app is open on screen</b>, so leave it running, plugged in, on your nightstand. <span id="volTip">It plays even with the silent switch on.</span> Each time you open it, tap <b>TAP TO ARM SOUND</b> once.</p>
       <h3>YOUR PRIVACY</h3>
-      <p>No accounts, no ads, no tracking. Your settings stay on your phone.</p>
+      <p>No accounts, no ads, no tracking. Your settings stay on your phone.<span class="fbOnly"> Feedback sends only what you type.</span></p>
+      <p class="fbOnly">Questions or ideas? <button id="fbOpen" class="linkbtn" type="button" style="color:var(--lit);font-size:14px">Send feedback</button></p>
       <div class="btns"><button id="gotIt" class="primary" type="button">GOT IT</button></div>
+    </div>
+  </div>
+
+<div class="panel" id="fb" role="dialog" aria-label="Send feedback">
+    <div class="card">
+      <h2>SEND FEEDBACK</h2>
+      <label>YOUR MESSAGE<textarea id="fbMsg" maxlength="2000" placeholder="Ideas, bugs, a favorite sound..."></textarea></label>
+      <label>YOUR EMAIL (OPTIONAL, ONLY IF YOU'D LIKE A REPLY)<input id="fbEmail" type="email" autocomplete="email" maxlength="200"></label>
+      <div id="fbCheck"></div>
+      <div class="note" id="fbStatus"></div>
+      <div class="btns"><button id="fbCancel" type="button">Cancel</button><button id="fbSend" class="primary" type="button">Send</button></div>
     </div>
   </div>
 
@@ -292,6 +309,55 @@
     $("installTip").innerHTML = "<b>Install it:</b> in Chrome, tap <b>&#8942; &rarr; Add to Home screen</b> (or <b>Install app</b>). It then runs full screen, even offline.";
     $("volTip").innerHTML = "It plays at your <b>media volume</b>, so keep that turned up.";
   }
+  // ---------- Feedback form (2026-10-02) ----------
+  // Posts to the retroclock-feedback Worker (same origin, retroclock.org only). Turnstile (Cloudflare's
+  // anti-spam check) is loaded only when the form opens, so the rest of the app makes no outside requests.
+  const TURNSTILE_SITEKEY = "";  // set once J creates the widget; empty = feedback hidden on the live site
+  const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
+  const FB_KEY = isLocal ? "1x00000000000000000000AA" : TURNSTILE_SITEKEY;  // Cloudflare's always-pass test key locally
+  const FB_URL = isLocal ? "http://localhost:8787/api/feedback" : "/api/feedback";
+  const fbOn = !!FB_KEY && (isLocal || /(^|\.)retroclock\.org$/.test(location.hostname));
+  document.querySelectorAll(".fbOnly").forEach(el => { el.hidden = !fbOn; });
+  let fbToken = "", fbWidget = null;
+  function fbRenderCheck() {
+    if (fbWidget !== null) { window.turnstile.reset(fbWidget); return; }
+    fbWidget = window.turnstile.render("#fbCheck", { sitekey: FB_KEY, theme: "dark",
+      callback: t => { fbToken = t; }, "expired-callback": () => { fbToken = ""; } });
+  }
+  function fbOpen() {
+    $("fbStatus").textContent = ""; $("fbSend").disabled = false; fbToken = "";
+    $("fb").classList.add("open");
+    if (window.turnstile) return fbRenderCheck();
+    const sc = document.createElement("script");
+    sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    sc.onload = fbRenderCheck;
+    sc.onerror = () => { $("fbStatus").textContent = "Couldn't load the spam check. Are you online?"; };
+    document.head.appendChild(sc);
+  }
+  $("fbOpen").addEventListener("click", fbOpen);
+  $("fbCancel").addEventListener("click", () => $("fb").classList.remove("open"));
+  $("fbSend").addEventListener("click", async () => {
+    const message = $("fbMsg").value.trim();
+    if (!message) { $("fbStatus").textContent = "Please write a message first."; return; }
+    if (!fbToken) { $("fbStatus").textContent = "One moment, the spam check is still running."; return; }
+    $("fbSend").disabled = true; $("fbStatus").textContent = "Sending...";
+    try {
+      const r = await fetch(FB_URL, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, email: $("fbEmail").value.trim(), token: fbToken }) });
+      const d = await r.json();
+      if (d.ok) {
+        $("fbMsg").value = ""; $("fbEmail").value = "";
+        $("fbStatus").textContent = "Thanks! Your feedback was sent.";
+        setTimeout(() => $("fb").classList.remove("open"), 1800);
+        return;
+      }
+      $("fbStatus").textContent = d.error || "Something went wrong. Please try again.";
+    } catch (e) {
+      $("fbStatus").textContent = "Couldn't send. Are you online?";
+    }
+    $("fbSend").disabled = false; fbToken = ""; if (window.turnstile && fbWidget !== null) window.turnstile.reset(fbWidget);
+  });
+
   const showWelcome = () => $("welcome").classList.add("open");
   $("gotIt").addEventListener("click", () => { $("welcome").classList.remove("open"); state.welcomed = true; save(); ensureAudio(); updateArm(); });
   $("helpBtn").addEventListener("click", showWelcome);
