@@ -104,7 +104,7 @@
       <div class="row"><span>Size</span>
         <select id="size"><option value="normal">Normal</option><option value="large">Large</option><option value="max">Max</option></select></div>
       <div class="row"><span>Sound</span>
-        <select id="sound"><option value="beep">Beep</option><option value="buzzer">Buzzer</option></select></div>
+        <select id="sound"><option value="beep">Beep</option><option value="buzzer">Buzzer</option><option value="marimba">Marimba</option><option value="lofi">Lo-fi Piano</option><option value="drum">Tongue Drum</option></select></div>
       <div class="btns"><button id="test" type="button">Test sound</button><button id="done" class="primary" type="button">Done</button></div>
       <div class="note" id="status"></div>
     </div>
@@ -176,10 +176,15 @@
   const saw = (f, t) => 2 * ((f * t) % 1) - 1;
   const env = (t, start, dur) => { const x = t - start; return x < 0 || x > dur ? 0 : Math.min(1, x / .004, (dur - x) / .004); };
   // One cycle each; <audio loop> repeats it.
-  const LEN = { beep: 1.15, buzzer: 1.0 };
+  const LEN = { beep: 1.15, buzzer: 1.0, marimba: 5.6, lofi: 5.4, drum: 3.08 };
   const SOUNDS = {
     beep: wav(LEN.beep, t => { let e = 0; for (let i = 0; i < 4; i++) e += env(t, i * .14, .07); return .45 * e * sq(2730, t); }),  // piezo "beep-beep-beep-beep"
     buzzer: wav(LEN.buzzer, t => env(t, 0, .55) * (.5 * saw(118, t) + .2 * sq(236, t))),                                           // clock-radio "BZZZT"
+    // Chimes made with ElevenLabs sound effects (2026-10-02, J's picks), crossfaded/trimmed into seamless WAV loops.
+    // WAV, not MP3: MP3 adds a tiny silent gap on every loop.
+    marimba: "sounds/marimba.wav",
+    lofi: "sounds/lofi-piano.wav",
+    drum: "sounds/tongue-drum.wav",
   };
   const players = {};
   for (const k in SOUNDS) { const a = new Audio(SOUNDS[k]); a.loop = true; a.preload = "auto"; players[k] = a; }
@@ -251,7 +256,7 @@
   });
   $("toggle").addEventListener("click", e => { const b = e.currentTarget; b.setAttribute("aria-checked", b.getAttribute("aria-checked") !== "true"); });
   $("size").addEventListener("change", () => { state.size = $("size").value; applySize(); save(); });
-  $("test").addEventListener("click", () => startSound($("sound").value, 2));
+  $("test").addEventListener("click", () => startSound($("sound").value, LEN[$("sound").value] > 3 ? 1 : 2));
   $("done").addEventListener("click", () => {
     stopSound();
     state.time = $("time").value || state.time; state.on = $("toggle").getAttribute("aria-checked") === "true";

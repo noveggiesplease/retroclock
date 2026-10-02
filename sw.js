@@ -1,7 +1,8 @@
 // Offline cache so RetroClock opens without a network once installed.
 // Bump VERSION whenever any file changes, or phones keep the old copy.
-const VERSION = "retroclock-v4";
-const FILES = ["./", "index.html", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
+const VERSION = "retroclock-v5";
+const FILES = ["./", "index.html", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png",
+  "sounds/marimba.wav", "sounds/lofi-piano.wav", "sounds/tongue-drum.wav"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))));
