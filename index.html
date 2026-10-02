@@ -37,6 +37,9 @@
   .seg.on { fill: var(--lit); filter: drop-shadow(0 0 .6px var(--glow)) drop-shadow(0 0 5px var(--glow)); }
   .lbl { fill: var(--ghost); font: 600 13px ui-monospace, Menlo, monospace; letter-spacing: 1px; }
   .lbl.on { fill: var(--lit); }
+  /* Size setting (2026-10-02). % is of the body's content box, so it stays inside the notch/safe areas. */
+  body.size-large #face { width: min(97%, 205vh); max-height: 80vh; }
+  body.size-max #face { width: min(100%, 240vh); max-height: 86vh; }
   .ringing #face { animation: flash 1s steps(1) infinite; width: min(94vw, 105vh); margin-bottom: 18vh; }
   @keyframes flash { 50% { opacity: .15; } }
 
@@ -98,6 +101,8 @@
       <h2>ALARM</h2>
       <div class="row"><span>Time</span><input id="time" type="time" value="06:30"></div>
       <div class="row"><span>On</span><button class="toggle" id="toggle" role="switch" aria-checked="false" type="button" aria-label="Alarm on"></button></div>
+      <div class="row"><span>Size</span>
+        <select id="size"><option value="normal">Normal</option><option value="large">Large</option><option value="max">Max</option></select></div>
       <div class="row"><span>Sound</span>
         <select id="sound"><option value="beep">Beep</option><option value="buzzer">Buzzer</option></select></div>
       <div class="btns"><button id="test" type="button">Test sound</button><button id="done" class="primary" type="button">Done</button></div>
@@ -144,12 +149,13 @@
 
   // ---------- Settings (this phone only) ----------
   const KEY = "retroclock.v1";
-  const state = { time: "06:30", on: false, sound: "beep", bright: 0 };
+  const state = { time: "06:30", on: false, sound: "beep", bright: 0, size: "normal" };
   try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
   const BRIGHT = [1, .5, .22, .07];
+  const applySize = () => { document.body.classList.remove("size-large", "size-max"); if (state.size !== "normal") document.body.classList.add("size-" + state.size); };
   const applyBright = () => { face.style.opacity = BRIGHT[state.bright % BRIGHT.length]; };
-  applyBright();
+  applyBright(); applySize();
 
   // ---------- Audio ----------
   // Sounds are synthesized here into little WAV files and played through <audio> elements.
@@ -236,7 +242,7 @@
   $("arm").addEventListener("click", () => { ensureAudio(); wake(); poke(); });
   $("alarmBtn").addEventListener("click", () => {
     ensureAudio(); wake(); poke();
-    $("time").value = state.time; $("toggle").setAttribute("aria-checked", state.on); $("sound").value = state.sound;
+    $("time").value = state.time; $("toggle").setAttribute("aria-checked", state.on); $("sound").value = state.sound; $("size").value = state.size;
     $("status").textContent = [
       "wakeLock" in navigator ? "Screen stays awake while open." : "This browser can't keep the screen awake; set Auto-Lock to Never.",
       "The alarm only rings while RetroClock is open. Leave it on the charger.",
@@ -244,6 +250,7 @@
     $("panel").classList.add("open");
   });
   $("toggle").addEventListener("click", e => { const b = e.currentTarget; b.setAttribute("aria-checked", b.getAttribute("aria-checked") !== "true"); });
+  $("size").addEventListener("change", () => { state.size = $("size").value; applySize(); save(); });
   $("test").addEventListener("click", () => startSound($("sound").value, 2));
   $("done").addEventListener("click", () => {
     stopSound();
