@@ -88,10 +88,12 @@
   #welcome p, #welcome ul { margin: 0; color: #ff8a7d; font-size: 14px; }
   #welcome ul { padding-left: 18px; display: grid; gap: 4px; }
   #welcome b { color: var(--lit); }
-  #fb textarea, #fb input { width: 100%; background: #120201; color: var(--lit); border: 1px solid #4a0d06; border-radius: 10px;
-    padding: 10px 12px; font: 15px ui-monospace, Menlo, monospace; color-scheme: dark; }
+  /* 16px: iOS zooms the whole page in when a smaller text field gets focus, which pushed the boxes off the card
+     (J's screenshot, 2026-10-02). min-width: 0 stops the grid labels from growing to fit the boxes. */
+  #fb textarea, #fb input { width: 100%; min-width: 0; max-width: 100%; background: #120201; color: var(--lit); border: 1px solid #4a0d06; border-radius: 10px;
+    padding: 10px 12px; font: 16px ui-monospace, Menlo, monospace; color-scheme: dark; }
   #fb textarea { min-height: 120px; resize: vertical; }
-  #fb label { font-size: 13px; letter-spacing: 1px; color: #ff8a7d; display: grid; gap: 6px; }
+  #fb label { font-size: 13px; letter-spacing: 1px; color: #ff8a7d; display: grid; gap: 6px; min-width: 0; }
   #fbStatus:empty { display: none; }
   .linkbtn { background: none; border: 0; color: var(--ui); font: inherit; font-size: 13px; text-decoration: underline;
     cursor: pointer; padding: 4px 0; justify-self: center; }
