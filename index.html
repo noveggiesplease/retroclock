@@ -80,6 +80,14 @@
   .btns button { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #4a0d06; background: #120201;
     color: var(--lit); cursor: pointer; }
   .btns button.primary { background: var(--lit); color: #000; border-color: var(--lit); font-weight: 700; }
+  /* Welcome / help (2026-10-02): shown once on first visit, reopened from settings via "About / Help". */
+  #welcome .card { max-height: 100%; overflow-y: auto; gap: 12px; line-height: 1.45; letter-spacing: .3px; width: min(460px, 100%); }
+  #welcome h3 { margin: 6px 0 0; font-size: 13px; letter-spacing: 3px; color: var(--lit); }
+  #welcome p, #welcome ul { margin: 0; color: #ff8a7d; font-size: 14px; }
+  #welcome ul { padding-left: 18px; display: grid; gap: 4px; }
+  #welcome b { color: var(--lit); }
+  .linkbtn { background: none; border: 0; color: var(--ui); font: inherit; font-size: 13px; text-decoration: underline;
+    cursor: pointer; padding: 4px 0; justify-self: center; }
   .note { font-size: 12px; color: var(--ui); line-height: 1.5; letter-spacing: .5px; }
 </style>
 </head>
@@ -106,7 +114,27 @@
       <div class="row"><span>Sound</span>
         <select id="sound"><option value="beep">Beep</option><option value="buzzer">Buzzer</option><option value="marimba">Marimba</option><option value="lofi">Lo-fi Piano</option><option value="drum">Tongue Drum</option></select></div>
       <div class="btns"><button id="test" type="button">Test sound</button><button id="done" class="primary" type="button">Done</button></div>
+      <button id="helpBtn" class="linkbtn" type="button">About / Help</button>
       <div class="note" id="status"></div>
+    </div>
+  </div>
+
+<div class="panel" id="welcome" role="dialog" aria-label="Welcome to RetroClock">
+    <div class="card">
+      <h2>WELCOME TO RETROCLOCK</h2>
+      <p>A red-digit bedside clock, like the one from 1985, for your phone.</p>
+      <h3>GETTING STARTED</h3>
+      <ul>
+        <li><b>Install it:</b> in Safari, tap <b>Share &rarr; Add to Home Screen</b>. It then runs full screen, even offline.</li>
+        <li><b>Turn it sideways</b> for the big digits.</li>
+        <li><b>Tap the clock</b> to dim it for the night.</li>
+        <li><b>Tap ALARM</b> to set a wake-up time, pick a sound, and choose a digit size.</li>
+      </ul>
+      <h3>ONE IMPORTANT THING</h3>
+      <p>RetroClock is a nightstand clock. The alarm only rings <b>while the app is open on screen</b>, so leave it running, plugged in, on your nightstand. It plays even with the silent switch on. Each time you open it, tap <b>TAP TO ARM SOUND</b> once.</p>
+      <h3>YOUR PRIVACY</h3>
+      <p>No accounts, no ads, no tracking. Your settings stay on your phone.</p>
+      <div class="btns"><button id="gotIt" class="primary" type="button">GOT IT</button></div>
     </div>
   </div>
 
@@ -149,7 +177,7 @@
 
   // ---------- Settings (this phone only) ----------
   const KEY = "retroclock.v1";
-  const state = { time: "06:30", on: false, sound: "beep", bright: 0, size: "normal" };
+  const state = { time: "06:30", on: false, sound: "beep", bright: 0, size: "normal", welcomed: false };
   try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
   const BRIGHT = [1, .5, .22, .07];
@@ -257,6 +285,12 @@
   $("toggle").addEventListener("click", e => { const b = e.currentTarget; b.setAttribute("aria-checked", b.getAttribute("aria-checked") !== "true"); });
   $("size").addEventListener("change", () => { state.size = $("size").value; applySize(); save(); });
   $("test").addEventListener("click", () => startSound($("sound").value, LEN[$("sound").value] > 3 ? 1 : 2));
+  // Welcome: once on first visit, and any time from settings. GOT IT is a tap, so it also arms sound.
+  const showWelcome = () => $("welcome").classList.add("open");
+  $("gotIt").addEventListener("click", () => { $("welcome").classList.remove("open"); state.welcomed = true; save(); ensureAudio(); updateArm(); });
+  $("helpBtn").addEventListener("click", showWelcome);
+  if (!state.welcomed) showWelcome();
+
   $("done").addEventListener("click", () => {
     stopSound();
     state.time = $("time").value || state.time; state.on = $("toggle").getAttribute("aria-checked") === "true";
