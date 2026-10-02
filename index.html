@@ -26,6 +26,8 @@
     --ui: #7a1a10;
     --bg: #000;
   }
+  /* iOS Safari enlarges some text in landscape on its own, which made section headers outgrow the title (J, 2026-10-02). */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--lit); overflow: hidden;
     font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; user-select: none; -webkit-user-select: none; }
@@ -82,7 +84,7 @@
   .btns button.primary { background: var(--lit); color: #000; border-color: var(--lit); font-weight: 700; }
   /* Welcome / help (2026-10-02): shown once on first visit, reopened from settings via "About / Help". */
   #welcome .card { max-height: 100%; overflow-y: auto; gap: 12px; line-height: 1.45; letter-spacing: .3px; width: min(460px, 100%); }
-  #welcome h3 { margin: 6px 0 0; font-size: 13px; letter-spacing: 3px; color: var(--lit); }
+  #welcome h3 { margin: 6px 0 0; font-size: 16px; letter-spacing: 4px; font-weight: 700; color: var(--lit); }  /* same as the title (.card h2) */
   #welcome p, #welcome ul { margin: 0; color: #ff8a7d; font-size: 14px; }
   #welcome ul { padding-left: 18px; display: grid; gap: 4px; }
   #welcome b { color: var(--lit); }
