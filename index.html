@@ -127,13 +127,13 @@
       <p>A red-digit bedside clock, like the one from 1985, for your phone.</p>
       <h3>GETTING STARTED</h3>
       <ul>
-        <li><b>Install it:</b> in Safari, tap <b>Share &rarr; Add to Home Screen</b>. It then runs full screen, even offline.</li>
+        <li id="installTip"><b>Install it:</b> in Safari, tap <b>Share &rarr; Add to Home Screen</b>. It then runs full screen, even offline.</li>
         <li><b>Turn it sideways</b> for the big digits.</li>
         <li><b>Tap the clock</b> to dim it for the night.</li>
         <li><b>Tap ALARM</b> to set a wake-up time, pick a sound, and choose a digit size.</li>
       </ul>
       <h3>ONE IMPORTANT THING</h3>
-      <p>RetroClock is a nightstand clock. The alarm only rings <b>while the app is open on screen</b>, so leave it running, plugged in, on your nightstand. It plays even with the silent switch on. Each time you open it, tap <b>TAP TO ARM SOUND</b> once.</p>
+      <p>RetroClock is a nightstand clock. The alarm only rings <b>while the app is open on screen</b>, so leave it running, plugged in, on your nightstand. <span id="volTip">It plays even with the silent switch on.</span> Each time you open it, tap <b>TAP TO ARM SOUND</b> once.</p>
       <h3>YOUR PRIVACY</h3>
       <p>No accounts, no ads, no tracking. Your settings stay on your phone.</p>
       <div class="btns"><button id="gotIt" class="primary" type="button">GOT IT</button></div>
@@ -288,6 +288,10 @@
   $("size").addEventListener("change", () => { state.size = $("size").value; applySize(); save(); });
   $("test").addEventListener("click", () => startSound($("sound").value, LEN[$("sound").value] > 3 ? 1 : 2));
   // Welcome: once on first visit, and any time from settings. GOT IT is a tap, so it also arms sound.
+  if (/Android/i.test(navigator.userAgent)) {  // Android: different install menu, and the alarm follows media volume
+    $("installTip").innerHTML = "<b>Install it:</b> in Chrome, tap <b>&#8942; &rarr; Add to Home screen</b> (or <b>Install app</b>). It then runs full screen, even offline.";
+    $("volTip").innerHTML = "It plays at your <b>media volume</b>, so keep that turned up.";
+  }
   const showWelcome = () => $("welcome").classList.add("open");
   $("gotIt").addEventListener("click", () => { $("welcome").classList.remove("open"); state.welcomed = true; save(); ensureAudio(); updateArm(); });
   $("helpBtn").addEventListener("click", showWelcome);
