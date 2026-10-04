@@ -1,7 +1,7 @@
 {
   "name": "RetroClock",
   "short_name": "RetroClock",
-  "description": "Minimalist red seven-segment nightstand clock with one alarm. No tracking, no network.",
+  "description": "Minimalist red seven-segment nightstand clock with one alarm. No accounts, no ads, works offline.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
