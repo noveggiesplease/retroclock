@@ -43,7 +43,9 @@
   body.size-large #face { width: min(97%, 205vh); max-height: 80vh; }
   body.size-max #face { width: min(100%, 240vh); max-height: 86vh; }
   .ringing #face { animation: flash 1s steps(1) infinite; width: min(94vw, 105vh); margin-bottom: 18vh; }
-  @keyframes flash { 50% { opacity: .15; } }
+  /* Explicit 0% keyframe: without it the flash started from the dimmed opacity, so a clock dimmed to 7% only
+     flashed between 7% and 15% (found 2026-10-08). Ringing now always flashes at full brightness. */
+  @keyframes flash { 0% { opacity: 1; } 50% { opacity: .15; } 100% { opacity: .15; } }
 
   #bar { position: fixed; left: 0; right: 0; bottom: calc(14px + env(safe-area-inset-bottom));
     display: flex; justify-content: center; gap: 28px; font-size: 15px; letter-spacing: 2px;
