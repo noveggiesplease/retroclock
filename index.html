@@ -268,11 +268,17 @@
   }
 
   // ---------- Keep the screen awake ----------
-  let lock = null;
+  let lock = null, asking = false;
   async function wake() {
-    try { if ("wakeLock" in navigator && !lock) { lock = await navigator.wakeLock.request("screen");
-      lock.addEventListener("release", () => { lock = null; }); } } catch (e) {}
+    if (!("wakeLock" in navigator) || lock || asking) return;
+    asking = true;
+    try { lock = await navigator.wakeLock.request("screen");
+      lock.addEventListener("release", () => { lock = null; setTimeout(wake, 1000); }); } catch (e) {}
+    asking = false;
   }
+  // iOS can drop the lock without a visibility change (overnight, after a call), and the old code only asked again
+  // on a tap, so the phone slept into StandBy. Now: ask on load, ask again right after a release, and retry every minute.
+  setInterval(() => { if (document.visibilityState === "visible") wake(); }, 60 * 1000);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") { wake(); updateArm(); }
   });
@@ -382,7 +388,7 @@
   $("snooze").addEventListener("click", () => { stopRing(); snoozeUntil = Date.now() + 10 * 60 * 1000; });
   $("off").addEventListener("click", () => { stopRing(); snoozeUntil = 0; });
 
-  updateBar(); updateArm(); poke();
+  updateBar(); updateArm(); poke(); wake();
   const tick = () => { const now = new Date(); draw(now); check(now); };
   tick(); setInterval(tick, 250);
 
