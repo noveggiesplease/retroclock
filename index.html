@@ -104,6 +104,19 @@
   .linkbtn { background: none; border: 0; color: var(--ui); font: inherit; font-size: 13px; text-decoration: underline;
     cursor: pointer; padding: 4px 0; justify-self: center; }
   .note { font-size: 12px; color: var(--ui); line-height: 1.5; letter-spacing: .5px; }
+  /* Sleep noise panel (2026-10-23) */
+  #noise .card { max-height: 100%; overflow-y: auto; }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; }
+  .presets button { padding: 8px 12px; border-radius: 10px; border: 1px solid #4a0d06; background: #120201; color: var(--lit);
+    font: inherit; font-size: 14px; cursor: pointer; }
+  .presets button.sel { background: var(--lit); color: #000; border-color: var(--lit); }
+  .slider { display: grid; gap: 4px; }
+  .slider span { display: flex; justify-content: space-between; font-size: 13px; color: #ff8a7d; }
+  .slider input { width: 100%; accent-color: var(--lit); margin: 0; height: 28px; }
+  #noise details summary { cursor: pointer; font-size: 13px; color: var(--ui); }
+  #noise details[open] { display: grid; gap: 12px; }
+  #noise .note a { color: var(--ui); }
+  @media (max-width: 440px) { #bar { gap: 14px; flex-wrap: wrap; } }
 </style>
 </head>
 <body class="idle">
@@ -112,6 +125,7 @@
   <div id="bar">
     <button id="arm" type="button">TAP TO ARM SOUND</button>
     <button id="alarmBtn" type="button">ALARM OFF</button>
+    <button id="noiseBtn" type="button">NOISE OFF</button>
   </div>
 
   <div id="ring">
@@ -134,6 +148,25 @@
     </div>
   </div>
 
+<div class="panel" id="noise" role="dialog" aria-label="Sleep noise">
+    <div class="card">
+      <h2>NOISE</h2>
+      <div class="row"><span>On</span><button class="toggle" id="nToggle" role="switch" aria-checked="false" type="button" aria-label="Noise on"></button></div>
+      <div class="presets" id="nPresets">
+        <button type="button" data-p="woosh">Woosh</button><button type="button" data-p="deep">Deep brown</button><button type="button" data-p="pink">Pink</button><button type="button" data-p="mine" id="nMine" hidden>My Noise</button>
+      </div>
+      <label class="slider"><span>Depth<b id="nDepthV"></b></span><input id="nDepth" type="range" min="0" max="150"></label>
+      <label class="slider"><span>Softness<b id="nSoftV"></b></span><input id="nSoft" type="range" min="0" max="100"></label>
+      <label class="slider"><span>Volume<b id="nVolV"></b></span><input id="nVol" type="range" min="0" max="100"></label>
+      <details><summary>More</summary>
+        <label class="slider"><span>Movement (slow swell)<b id="nMoveV"></b></span><input id="nMove" type="range" min="0" max="100"></label>
+        <label class="slider"><span>Swell speed<b id="nSpeedV"></b></span><input id="nSpeed" type="range" min="4" max="20"></label>
+      </details>
+      <div class="btns"><button id="nSave" type="button">Save as My Noise</button><button id="nDone" class="primary" type="button">Done</button></div>
+      <div class="note">Stops when the alarm rings, comes back after SNOOZE. <a href="https://www.youtube.com/watch?v=vCmYDt5bmYY" target="_blank" rel="noopener">Our favorite white noise inspiration</a></div>
+    </div>
+  </div>
+
 <div class="panel" id="welcome" role="dialog" aria-label="Welcome to RetroClock">
     <div class="card">
       <h2>WELCOME TO RETROCLOCK</h2>
@@ -144,6 +177,7 @@
         <li><b>Turn it sideways</b> for the big digits.</li>
         <li><b>Tap the clock</b> to dim it for the night.</li>
         <li><b>Tap ALARM</b> to set a wake-up time, pick a sound, and choose a digit size.</li>
+        <li><b>Tap NOISE</b> for steady sleep sound. Tune it with the sliders and save your favorite.</li>
       </ul>
       <h3>ONE IMPORTANT THING</h3>
       <p>RetroClock is a nightstand clock. The alarm only rings <b>while the app is open on screen</b>, so leave it running, plugged in, on your nightstand. <span id="volTip">It plays even with the silent switch on.</span> Each time you open it, tap <b>TAP TO ARM SOUND</b> once.</p>
@@ -256,6 +290,7 @@
       }
     }
     updateArm();
+    if (state.noise && state.noise.on && !nPausedForAlarm) noiseStart();
   }
   function startSound(kind, cycles) {
     stopSound(); ensureAudio(); active = kind;
@@ -265,6 +300,70 @@
   function stopSound() {
     clearTimeout(stopT); active = null;
     for (const k in players) { players[k].pause(); players[k].currentTime = 0; }
+  }
+
+  // ---------- Sleep noise (2026-10-23) ----------
+  // Generated here like the alarm sounds, but through Web Audio: it loops with no seam and gets a real volume
+  // control (iOS ignores <audio> volume). audioSession "playback" (set in ensureAudio) keeps it going with the
+  // silent switch on in iOS 17+. Three colors are rendered once into looping buffers; Depth blends them.
+  // Settings are [depth, softness, movement, swell seconds, volume], same scale as sound-lab/noise.html.
+  const NOISE_PRESETS = { woosh: [20, 96, 0, 13, 73], deep: [112, 53, 0, 13, 73], pink: [50, 25, 0, 8, 60] };
+  const N_IDS = ["nDepth", "nSoft", "nMove", "nSpeed", "nVol"];
+  state.noise = Object.assign({ on: false, p: NOISE_PRESETS.woosh.slice(), mine: null }, state.noise);
+  let nctx = null, nn = null, nPausedForAlarm = false;
+  function noiseRender(kind, n, fade) {
+    const raw = new Float32Array(n + fade), out = new Float32Array(n);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0, last = 0;
+    for (let i = 0; i < raw.length; i++) {
+      const w = Math.random() * 2 - 1;
+      if (kind === 0) raw[i] = w * .5;
+      else if (kind === 1) {                 // Paul Kellet's pink filter
+        b0 = .99886 * b0 + w * .0555179; b1 = .99332 * b1 + w * .0750759; b2 = .969 * b2 + w * .153852;
+        b3 = .8665 * b3 + w * .3104856; b4 = .55 * b4 + w * .5329522; b5 = -.7616 * b5 - w * .016898;
+        raw[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * .5362) * .11; b6 = w * .115926;
+      } else { last = (last + .02 * w) / 1.02; raw[i] = last * 3.5; }   // leaky integrator: brown without drift
+    }
+    for (let i = 0; i < n; i++) {            // fold the tail into the start (equal-power) so the loop never clicks
+      if (i < fade) { const t = i / fade * Math.PI / 2; out[i] = raw[i] * Math.sin(t) + raw[n + i] * Math.cos(t); } else out[i] = raw[i];
+    }
+    return out;
+  }
+  function noiseBuild() {
+    nctx = new (window.AudioContext || window.webkitAudioContext)();
+    const sr = nctx.sampleRate, n = 12 * sr, master = nctx.createGain(), swell = nctx.createGain();
+    const soft = nctx.createBiquadFilter(), deep = nctx.createBiquadFilter(), mix = [];
+    soft.type = deep.type = "lowpass"; soft.Q.value = deep.Q.value = .5; master.gain.value = 0;
+    for (let k = 0; k < 3; k++) {
+      const buf = nctx.createBuffer(2, n, sr);
+      buf.copyToChannel(noiseRender(k, n, sr / 2), 0); buf.copyToChannel(noiseRender(k, n, sr / 2), 1);   // separate noise per ear
+      const src = nctx.createBufferSource(), g = nctx.createGain();
+      src.buffer = buf; src.loop = true; src.connect(g).connect(deep); src.start(); mix.push(g);
+    }
+    deep.connect(soft).connect(swell).connect(master).connect(nctx.destination);
+    const lfo = nctx.createOscillator(), lfoAmt = nctx.createGain();
+    lfo.connect(lfoAmt).connect(swell.gain); lfo.start();
+    nn = { master, swell, soft, deep, mix, lfo, lfoAmt };
+  }
+  function noiseApply() {
+    if (!nn) return;
+    const [d, s, m, sp, v] = state.noise.p, t = nctx.currentTime, set = (prm, x) => prm.setTargetAtTime(x, t, .05);
+    const c = Math.min(d, 100) / 50, hp = Math.PI / 2;   // 0..2 across white -> pink -> brown
+    set(nn.mix[0].gain, c < 1 ? Math.cos(c * hp) : 0);
+    set(nn.mix[1].gain, c < 1 ? Math.sin(c * hp) : Math.cos((c - 1) * hp));
+    set(nn.mix[2].gain, c < 1 ? 0 : Math.sin((c - 1) * hp));
+    set(nn.deep.frequency, d > 100 ? 1200 * Math.pow(60 / 1200, (d - 100) / 50) : 20000);   // past brown: down to 60 Hz
+    set(nn.soft.frequency, 18000 * Math.pow(250 / 18000, s / 100));                          // 18 kHz down to 250 Hz
+    const dip = m / 100 * .45;
+    set(nn.swell.gain, 1 - dip); set(nn.lfoAmt.gain, dip); set(nn.lfo.frequency, 1 / sp);
+    set(nn.master.gain, state.noise.on && !nPausedForAlarm ? Math.pow(v / 100, 2) * 1.5 : 0);
+  }
+  async function noiseStart() {
+    try { if (!nctx) noiseBuild(); await nctx.resume(); noiseApply(); } catch (e) {}
+  }
+  function noiseStop() {                     // fade out, then let the phone rest
+    if (!nn) return;
+    nn.master.gain.setTargetAtTime(0, nctx.currentTime, .08);
+    setTimeout(() => { if (!state.noise.on || nPausedForAlarm) nctx.suspend().catch(() => {}); }, 600);
   }
 
   // ---------- Keep the screen awake ----------
@@ -280,7 +379,7 @@
   // on a tap, so the phone slept into StandBy. Now: ask on load, ask again right after a release, and retry every minute.
   setInterval(() => { if (document.visibilityState === "visible") wake(); }, 60 * 1000);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") { wake(); updateArm(); }
+    if (document.visibilityState === "visible") { wake(); updateArm(); if (state.noise.on && nctx) noiseStart(); }
   });
 
   // ---------- Alarm logic ----------
@@ -293,13 +392,19 @@
     if (!ringing && snoozeUntil && now.getTime() >= snoozeUntil) { snoozeUntil = 0; ring(); }
     if (ringing && now.getTime() - ringStarted > RING_MAX) stopRing();
   }
-  function ring() { ringing = true; ringStarted = Date.now(); document.body.classList.add("ringing"); startSound(state.sound); }
+  function ring() {
+    ringing = true; ringStarted = Date.now(); document.body.classList.add("ringing"); startSound(state.sound);
+    if (state.noise.on) { nPausedForAlarm = true; noiseStop(); }
+  }
   function stopRing() { ringing = false; stopSound(); document.body.classList.remove("ringing"); }
 
   // ---------- UI ----------
   const $ = id => document.getElementById(id);
   const fmt = t => { let [h, m] = t.split(":").map(Number); const ap = h >= 12 ? "PM" : "AM"; return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ap}`; };
-  function updateBar() { $("alarmBtn").textContent = state.on ? `ALARM ${fmt(state.time)}` : "ALARM OFF"; }
+  function updateBar() {
+    $("alarmBtn").textContent = state.on ? `ALARM ${fmt(state.time)}` : "ALARM OFF";
+    $("noiseBtn").textContent = state.noise.on ? "NOISE ON" : "NOISE OFF";
+  }
   function updateArm() { document.body.classList.toggle("needs-arm", state.on && !unlocked); }
   let idleT;
   function poke() { document.body.classList.remove("idle"); clearTimeout(idleT); idleT = setTimeout(() => document.body.classList.add("idle"), 5000); }
@@ -379,14 +484,47 @@
   $("helpBtn").addEventListener("click", showWelcome);
   if (!state.welcomed) showWelcome();
 
+  // Noise panel: changes play live; a starting point lights up while the sliders match it exactly.
+  const nGet = () => N_IDS.map(id => +$(id).value);
+  function nShow() {
+    N_IDS.forEach((id, i) => { $(id).value = state.noise.p[i]; });
+    $("nDepthV").textContent = state.noise.p[0]; $("nSoftV").textContent = state.noise.p[1]; $("nMoveV").textContent = state.noise.p[2];
+    $("nSpeedV").textContent = state.noise.p[3] + "s"; $("nVolV").textContent = state.noise.p[4];
+    $("nMine").hidden = !state.noise.mine;
+    const presets = Object.assign({ mine: state.noise.mine }, NOISE_PRESETS), cur = String(state.noise.p);
+    document.querySelectorAll("#nPresets button").forEach(b => b.classList.toggle("sel", String(presets[b.dataset.p]) === cur));
+    $("nToggle").setAttribute("aria-checked", state.noise.on);
+  }
+  $("noiseBtn").addEventListener("click", () => { ensureAudio(); poke(); nShow(); $("noise").classList.add("open"); });
+  $("nToggle").addEventListener("click", () => {
+    state.noise.on = !state.noise.on; nPausedForAlarm = false; nShow(); save(); updateBar();
+    if (state.noise.on) noiseStart(); else noiseStop();
+  });
+  N_IDS.forEach(id => $(id).addEventListener("input", () => { state.noise.p = nGet(); nShow(); noiseApply(); }));
+  document.querySelectorAll("#nPresets button").forEach(b => b.addEventListener("click", () => {
+    const p = b.dataset.p === "mine" ? state.noise.mine : NOISE_PRESETS[b.dataset.p];
+    if (p) { state.noise.p = p.slice(); nShow(); noiseApply(); save(); }
+  }));
+  $("nSave").addEventListener("click", () => {
+    state.noise.mine = state.noise.p.slice(); save(); nShow();
+    $("nSave").textContent = "Saved"; setTimeout(() => { $("nSave").textContent = "Save as My Noise"; }, 1500);
+  });
+  $("nDone").addEventListener("click", () => { save(); $("noise").classList.remove("open"); poke(); });
+
   $("done").addEventListener("click", () => {
     stopSound();
     state.time = $("time").value || state.time; state.on = $("toggle").getAttribute("aria-checked") === "true";
     state.sound = $("sound").value; save(); updateBar(); updateArm(); ensureAudio();
     $("panel").classList.remove("open"); poke();
   });
-  $("snooze").addEventListener("click", () => { stopRing(); snoozeUntil = Date.now() + 10 * 60 * 1000; });
-  $("off").addEventListener("click", () => { stopRing(); snoozeUntil = 0; });
+  $("snooze").addEventListener("click", () => {
+    stopRing(); snoozeUntil = Date.now() + 10 * 60 * 1000;
+    if (nPausedForAlarm) { nPausedForAlarm = false; noiseStart(); }
+  });
+  $("off").addEventListener("click", () => {
+    stopRing(); snoozeUntil = 0;
+    if (nPausedForAlarm) { nPausedForAlarm = false; state.noise.on = false; save(); updateBar(); }
+  });
 
   updateBar(); updateArm(); poke(); wake();
   const tick = () => { const now = new Date(); draw(now); check(now); };
